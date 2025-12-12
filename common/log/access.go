@@ -2,7 +2,9 @@ package log
 
 import (
 	"context"
+	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/xtls/xray-core/common/serial"
 )
@@ -21,12 +23,14 @@ const (
 )
 
 type AccessMessage struct {
-	From   interface{}
-	To     interface{}
-	Status AccessStatus
-	Reason interface{}
-	Email  string
-	Detour string
+	From        interface{}
+	To          interface{}
+	Status      AccessStatus
+	Reason      interface{}
+	Email       string
+	Detour      string
+	UpCounter   *atomic.Int64
+	DownCounter *atomic.Int64
 }
 
 func (m *AccessMessage) String() string {
@@ -55,10 +59,27 @@ func (m *AccessMessage) String() string {
 		builder.WriteString(m.Email)
 	}
 
+	if m.UpCounter != nil {
+		builder.WriteString(" upload: ")
+		builder.WriteString(strconv.FormatInt(m.UpCounter.Load(), 10))
+	}
+	if m.DownCounter != nil {
+		builder.WriteString(" download: ")
+		builder.WriteString(strconv.FormatInt(m.DownCounter.Load(), 10))
+	}
 	return builder.String()
 }
 
 func ContextWithAccessMessage(ctx context.Context, accessMessage *AccessMessage) context.Context {
+	if accessMessage != nil {
+		if accessMessage.UpCounter == nil {
+			accessMessage.UpCounter = new(atomic.Int64)
+		}
+		if accessMessage.DownCounter == nil {
+			accessMessage.DownCounter = new(atomic.Int64)
+		}
+	}
+
 	return context.WithValue(ctx, accessMessageKey, accessMessage)
 }
 
@@ -67,4 +88,10 @@ func AccessMessageFromContext(ctx context.Context) *AccessMessage {
 		return accessMessage
 	}
 	return nil
+}
+
+func RecordFromContext(ctx context.Context) {
+	if accessMessage := AccessMessageFromContext(ctx); accessMessage != nil {
+		Record(accessMessage)
+	}
 }
