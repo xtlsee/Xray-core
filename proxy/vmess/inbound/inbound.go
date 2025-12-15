@@ -301,6 +301,7 @@ func (h *Handler) Process(ctx context.Context, network net.Network, connection s
 
 	responseDone := func() error {
 		defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
+		defer log.RecordFromContext(ctx)
 
 		writer := buf.NewBufferedWriter(buf.NewWriter(connection))
 		defer writer.Flush()

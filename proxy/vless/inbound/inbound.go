@@ -497,6 +497,8 @@ func (h *Handler) Process(ctx context.Context, network net.Network, connection s
 
 			getResponse := func() error {
 				defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
+				defer log.RecordFromContext(ctx)
+
 				if err := buf.Copy(serverReader, writer, buf.UpdateActivity(timer)); err != nil {
 					return errors.New("failed to deliver response payload").Base(err).AtInfo()
 				}

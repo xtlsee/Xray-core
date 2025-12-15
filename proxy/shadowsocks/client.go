@@ -7,6 +7,7 @@ import (
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/errors"
+	"github.com/xtls/xray-core/common/log"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/retry"
@@ -136,6 +137,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 
 		responseDone := func() error {
 			defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
+			defer log.RecordFromContext(ctx)
 
 			responseReader, err := ReadTCPResponse(user, conn)
 			if err != nil {
@@ -171,6 +173,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 
 		responseDone := func() error {
 			defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
+			defer log.RecordFromContext(ctx)
 
 			reader := &UDPReader{
 				Reader: conn,
