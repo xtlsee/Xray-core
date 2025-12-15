@@ -514,9 +514,14 @@ func (h *Handler) Process(ctx context.Context, network net.Network, connection s
 		}
 
 		if errors.Cause(err) != io.EOF {
+			to := ""
+			if request != nil && request.Address != nil && request.Port != 0 {
+				to = request.Destination().String()
+			}
+
 			log.Record(&log.AccessMessage{
 				From:   connection.RemoteAddr(),
-				To:     "",
+				To:     to,
 				Status: log.AccessRejected,
 				Reason: err,
 			})
