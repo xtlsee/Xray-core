@@ -2,6 +2,7 @@ package encoding
 
 import (
 	"context"
+	gerrors "errors"
 	"io"
 
 	"github.com/xtls/xray-core/common/buf"
@@ -91,9 +92,11 @@ func DecodeRequestHeader(isfb bool, first *buf.Buffer, reader io.Reader, validat
 			copy(id[:], buffer.Bytes())
 		}
 
+		var invalidUser error
 		if request.User = validator.Get(id); request.User == nil {
 			u := uuid.UUID(id)
-			return nil, nil, nil, isfb, errors.New("invalid request user id: " + u.String())
+			invalidUser = errors.New("invalid request user id: " + u.String())
+			//return nil, nil, nil, isfb, errors.New("invalid request user id: " + u.String())
 		}
 
 		if isfb {
@@ -102,12 +105,14 @@ func DecodeRequestHeader(isfb bool, first *buf.Buffer, reader io.Reader, validat
 
 		requestAddons, err := DecodeHeaderAddons(&buffer, reader)
 		if err != nil {
-			return nil, nil, nil, false, errors.New("failed to decode request header addons").Base(err)
+			//return nil, nil, nil, false, errors.New("failed to decode request header addons").Base(err)
+			return nil, nil, nil, false, gerrors.Join(invalidUser, errors.New("failed to decode request header addons").Base(err))
 		}
 
 		buffer.Clear()
 		if _, err := buffer.ReadFullFrom(reader, 1); err != nil {
-			return nil, nil, nil, false, errors.New("failed to read request command").Base(err)
+			//return nil, nil, nil, false, errors.New("failed to read request command").Base(err)
+			return nil, nil, nil, false, gerrors.Join(invalidUser, errors.New("failed to read request command").Base(err))
 		}
 
 		request.Command = protocol.RequestCommand(buffer.Byte(0))
@@ -122,9 +127,16 @@ func DecodeRequestHeader(isfb bool, first *buf.Buffer, reader io.Reader, validat
 				request.Port = port
 			}
 		}
+
 		if request.Address == nil {
-			return nil, nil, nil, false, errors.New("invalid request address")
+			//return nil, nil, nil, false, errors.New("invalid request address")
+			return nil, nil, nil, false, gerrors.Join(invalidUser, errors.New("invalid request address"))
 		}
+
+		if request.User == nil {
+			return nil, request, nil, isfb, invalidUser
+		}
+
 		return id[:], request, requestAddons, false, nil
 	default:
 		return nil, nil, nil, isfb, errors.New("invalid request version")
