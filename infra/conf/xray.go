@@ -173,6 +173,27 @@ func (c *InboundDetourConfig) Build() (*core.InboundHandlerConfig, error) {
 			return nil, err
 		}
 		receiverSettings.StreamSettings = ss
+		// TODO: Actually implement this breaking change
+		protocol := ss.GetEffectiveProtocol()
+		if (protocol == "websocket" || protocol == "httpupgrade" || protocol == "splithttp") &&
+			(c.StreamSetting.SocketSettings == nil || len(c.StreamSetting.SocketSettings.TrustedXForwardedFor) == 0) {
+			errors.LogWarning(
+				context.Background(),
+				`====== SECURITY WARNING ======`,
+				"\n",
+				`inbound "`, c.Tag, `" using `, protocol, ` has not configured "sockopt.trustedXForwardedFor".`,
+				"\n",
+				`THIS IS VERY INSECURE!!!`,
+				"\n",
+				`For compatibility, Xray still allows this for now and still trusts X-Forwarded-For implicitly.`,
+				"\n",
+				`Please configure "sockopt.trustedXForwardedFor" immediately.`,
+				"\n",
+				`In future versions, this option must be explicitly set.`,
+				"\n",
+				`====== SECURITY WARNING ======`,
+			)
+		}
 		if strings.Contains(ss.SecurityType, "reality") && (receiverSettings.PortList == nil ||
 			len(receiverSettings.PortList.Ports()) != 1 || receiverSettings.PortList.Ports()[0] != 443) {
 			errors.LogWarning(context.Background(), `REALITY: Listening on non-443 ports may get your IP blocked by the GFW`)
@@ -265,7 +286,7 @@ func (c *OutboundDetourConfig) Build() (*core.OutboundHandlerConfig, error) {
 
 	if c.SendThrough != nil {
 		address := ParseSendThough(c.SendThrough)
-		//Check if CIDR exists
+		// Check if CIDR exists
 		if strings.Contains(*c.SendThrough, "/") {
 			senderSettings.ViaCidr = strings.Split(*c.SendThrough, "/")[1]
 		} else {
@@ -361,6 +382,7 @@ type Config struct {
 	Observatory      *ObservatoryConfig      `json:"observatory"`
 	BurstObservatory *BurstObservatoryConfig `json:"burstObservatory"`
 	Version          *VersionConfig          `json:"version"`
+	Geodata          *GeodataConfig          `json:"geodata"`
 }
 
 func (c *Config) findInboundTag(tag string) int {
@@ -433,6 +455,10 @@ func (c *Config) Override(o *Config, fn string) {
 		c.Version = o.Version
 	}
 
+	if o.Geodata != nil {
+		c.Geodata = o.Geodata
+	}
+
 	// update the Inbound in slice if the only one in override config has same tag
 	if len(o.InboundConfigs) > 0 {
 		for i := range o.InboundConfigs {
@@ -444,7 +470,6 @@ func (c *Config) Override(o *Config, fn string) {
 				c.InboundConfigs = append(c.InboundConfigs, o.InboundConfigs[i])
 				errors.LogInfo(context.Background(), "[", fn, "] appended inbound with tag: ", o.InboundConfigs[i].Tag)
 			}
-
 		}
 	}
 
@@ -542,6 +567,7 @@ func (c *Config) Build() (*core.Config, error) {
 	}
 
 	if c.Reverse != nil {
+		return nil, errors.PrintRemovedFeatureError(`"legacy reverse"`, `"VLESS Reverse Proxy"`)
 		r, err := c.Reverse.Build()
 		if err != nil {
 			return nil, errors.New("failed to build reverse configuration").Base(err)
@@ -577,6 +603,14 @@ func (c *Config) Build() (*core.Config, error) {
 		r, err := c.Version.Build()
 		if err != nil {
 			return nil, errors.New("failed to build version configuration").Base(err)
+		}
+		config.App = append(config.App, serial.ToTypedMessage(r))
+	}
+
+	if c.Geodata != nil {
+		r, err := c.Geodata.Build()
+		if err != nil {
+			return nil, errors.New("failed to build geodata configuration").Base(err)
 		}
 		config.App = append(config.App, serial.ToTypedMessage(r))
 	}
